@@ -41,6 +41,8 @@ class Client(Base):
     is_logged_in = Column(Boolean, default=False)
     last_login_time = Column(DateTime(timezone=True), nullable=True)
     last_synced_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    sync_status = Column(String, default="PENDING")  # PENDING, IN_PROGRESS, COMPLETE, FAILED
+    orders_count = Column(Integer, default=0)
 
     # 🔗 Relationship to customers
     customers = relationship("Customer", back_populates="client", cascade="all, delete-orphan")

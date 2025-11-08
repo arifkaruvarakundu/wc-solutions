@@ -1,19 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { ShoppingBag, Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
-import { useDispatch, useSelector } from "react-redux";
-import {register} from "../redux/actions/AuthActions"
-import { useNavigate } from "react-router-dom"
+import { ShoppingBag, Lock, Eye, EyeOff } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { register } from "../redux/actions/AuthActions";
+import { useNavigate } from "react-router-dom";
+import api from "../../api_config";
 
 export default function RegisterPage() {
-
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(true);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [showAdvanced] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [form, setForm] = useState({
@@ -26,9 +25,14 @@ export default function RegisterPage() {
     consumer_secret: "",
   });
 
-  const dispatch = useDispatch()
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  const navigate = useNavigate()
+  // refs to hold interval IDs so we can clear them reliably
+  const taskIntervalRef = useRef(null);
+  const syncIntervalRef = useRef(null);
+  // ref to avoid starting multiple task polls
+  const isTaskPollingRef = useRef(false);
 
   const handleChange = (e) => {
     setForm((prev) => ({
@@ -36,6 +40,94 @@ export default function RegisterPage() {
       [e.target.name]: e.target.value,
     }));
   };
+
+  const startTaskPolling = (taskId) => {
+    if (!taskId) return;
+    if (isTaskPollingRef.current) return; // already polling
+    isTaskPollingRef.current = true;
+
+    let attempts = 0;
+    const maxAttempts = 60; // 5 minutes at 5s
+
+    taskIntervalRef.current = setInterval(async () => {
+      try {
+        attempts += 1;
+        const statusRes = await api.get(`/task-status/${taskId}`);
+        const statusData = statusRes?.data;
+
+        console.log("Task status:", statusData);
+
+        if (statusData?.status === "SUCCESS") {
+          clearInterval(taskIntervalRef.current);
+          taskIntervalRef.current = null;
+          isTaskPollingRef.current = false;
+
+          setSyncMessage("✅ Store synced successfully!");
+          // small delay so user sees success then navigate
+          setTimeout(() => {
+            setIsSyncing(false);
+            navigate("/dashboard");
+          }, 1200);
+        } else if (statusData?.status === "FAILURE") {
+          clearInterval(taskIntervalRef.current);
+          taskIntervalRef.current = null;
+          isTaskPollingRef.current = false;
+          setIsSyncing(false);
+          alert("❌ Sync failed, please try again later.");
+        } else if (attempts >= maxAttempts) {
+          clearInterval(taskIntervalRef.current);
+          taskIntervalRef.current = null;
+          isTaskPollingRef.current = false;
+          setIsSyncing(false);
+          alert("⏳ Sync taking too long, check again later.");
+        } else {
+          // optionally update message with status
+          setSyncMessage("Setting up your store and fetching WooCommerce data...");
+        }
+      } catch (pollError) {
+        console.error("Polling error:", pollError);
+        clearInterval(taskIntervalRef.current);
+        taskIntervalRef.current = null;
+        isTaskPollingRef.current = false;
+        setIsSyncing(false);
+      }
+    }, 5000);
+  };
+
+  useEffect(() => {
+    let interval;
+  
+    const checkSyncStatus = async () => {
+      const email = localStorage.getItem("email");
+      if (!email) return;
+  
+      try {
+        const { data } = await api.get(`/sync-status/${email}`);
+  
+        if (data?.sync_status === "COMPLETE") {
+          setSyncMessage("✅ Store synced successfully!");
+          setTimeout(() => {
+            setIsSyncing(false);
+            navigate("/dashboard");
+          }, 1000);
+        } else if (data?.sync_status === "IN_PROGRESS" || data?.sync_status === "PENDING") {
+          setIsSyncing(true);
+          setSyncMessage("🔄 Syncing your store data...");
+        } else if (data?.sync_status === "FAILED") {
+          setIsSyncing(false);
+          alert("❌ Sync failed, please try again later.");
+        }
+      } catch (err) {
+        console.error("Failed to check sync status:", err);
+      }
+    };
+  
+    // run immediately and then every 5 seconds
+    checkSyncStatus();
+    interval = setInterval(checkSyncStatus, 5000);
+  
+    return () => clearInterval(interval);
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,38 +150,19 @@ export default function RegisterPage() {
         )
       );
 
-      // The API returns: client_id, access_token, and task_id (you’ll add this in backend)
       const data = res?.payload || {};
       if (!data || !data.client_id) {
         throw new Error("Registration failed — no client data returned");
       }
 
+      // Save email/token for background checks (dashboard or refresh)
+      // if (data.access_token) localStorage.setItem("token", data.access_token);
+      // if (data.email) localStorage.setItem("email", data.email);
+
       // Show syncing overlay
       setIsSyncing(true);
       setSyncMessage("Setting up your store and fetching WooCommerce data...");
 
-      // Poll task status every 5 seconds
-      const taskId = data.task_id;
-      const interval = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/task-status/${taskId}`);
-          const statusData = await statusRes.json();
-
-          if (statusData.status === "SUCCESS") {
-            clearInterval(interval);
-            setSyncMessage("✅ Store synced successfully!");
-            setTimeout(() => navigate("/dashboard"), 1500);
-          } else if (statusData.status === "FAILURE") {
-            clearInterval(interval);
-            alert("❌ Sync failed, please try again later.");
-            setIsSyncing(false);
-          }
-        } catch (pollError) {
-          console.error("Polling error:", pollError);
-          clearInterval(interval);
-          setIsSyncing(false);
-        }
-      }, 5000);
     } catch (err) {
       console.error(err);
       alert(err.message || "Registration failed");
@@ -160,20 +233,16 @@ export default function RegisterPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {showPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Confirm Password *</Label>
+                  <Label htmlFor="confirmPassword">Confirm Password *</Label>
                   <div className="relative">
                     <Input
-                      id="password"
+                      id="confirmPassword"
                       name="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
                       placeholder="Confirm password"
@@ -187,11 +256,7 @@ export default function RegisterPage() {
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {showConfirmPassword ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -212,27 +277,14 @@ export default function RegisterPage() {
 
               {/* WooCommerce Credentials Section */}
               <div className="border-t border-border pt-6">
-                {/* <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center justify-between w-full mb-4 group"
-                > */}
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-primary" />
-                    <span className="font-semibold text-foreground">
-                      WooCommerce Credentials
-                    </span>
-                  </div>
-                  {/* <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                    {showAdvanced ? "Hide" : "Show"}
-                  </span> */}
-                {/* </button> */}
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-primary" />
+                  <span className="font-semibold text-foreground">WooCommerce Credentials</span>
+                </div>
 
                 {showAdvanced && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Add your WooCommerce store details
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">Add your WooCommerce store details</p>
 
                     <div className="space-y-2">
                       <Label htmlFor="store_url">Store URL</Label>
@@ -284,24 +336,15 @@ export default function RegisterPage() {
               </div>
 
               {/* Submit Button */}
-              <Button
-                type="submit"
-                className="w-full h-12 text-base font-semibold"
-                size="lg"
-              >
+              <Button type="submit" className="w-full h-12 text-base font-semibold" size="lg">
                 Create Account
               </Button>
 
               {/* Terms */}
               <p className="text-sm text-muted-foreground text-center">
                 By creating an account, you agree to our{" "}
-                <a href="/terms" className="text-primary hover:underline">
-                  Terms of Service
-                </a>{" "}
-                and{" "}
-                <a href="/privacy" className="text-primary hover:underline">
-                  Privacy Policy
-                </a>
+                <a href="/terms" className="text-primary hover:underline">Terms of Service</a> and{" "}
+                <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>
               </p>
             </form>
           </CardContent>
@@ -309,17 +352,15 @@ export default function RegisterPage() {
 
         {/* Sign In Link */}
         <p className="text-center mt-6 text-muted-foreground">
-          Already have an account?{" "}
-          <a href="/login" className="text-primary font-semibold hover:underline">
-            Sign in
-          </a>
+          Already have an account? <a href="/login" className="text-primary font-semibold hover:underline">Sign in</a>
         </p>
       </div>
+
       {/* ✅ Syncing Overlay */}
       {isSyncing && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent mb-4"></div>
-          <h2 className="text-lg font-semibold mb-2">{syncMessage}</h2>
+          <h2 className="text-lg font-semibold mb-2">{syncMessage || "Syncing your store..."}</h2>
           <p className="text-sm text-muted-foreground">This may take a few minutes...</p>
         </div>
       )}

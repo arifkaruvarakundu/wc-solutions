@@ -109,6 +109,18 @@ def get_task_status(task_id: str):
     result = AsyncResult(task_id)
     return {"task_id": task_id, "status": result.status}
 
+@router.get("/sync-status/{email}")
+def get_sync_status(email: str, db: Session = Depends(get_db)):
+    client = db.query(Client).filter(Client.email == email).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    return {
+        "sync_status": client.sync_status,
+        "sync_complete": client.sync_status == "COMPLETE",
+        "last_synced_at": client.last_synced_at
+    }
+
 @router.post("/login")
 def login_client(
     request: LoginRequest,

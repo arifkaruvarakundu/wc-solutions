@@ -177,23 +177,35 @@ const Dashboard = () => {
     }, []);
 
     const getSalesChartData = (data) => {
-    const maxDay = Math.max(
-        ...data.previousMonth.map(item => item.day),
-        ...data.currentMonth.map(item => item.day)
-    );
-
-    const labels = Array.from({ length: maxDay }, (_, i) => `${i + 1}`);
-
-    const prevSeries = Array(maxDay).fill(0);
-    const currSeries = Array(maxDay).fill(0);
-
-    data.previousMonth.forEach(({ day, total }) => {
-        prevSeries[day - 1] = total;
-    });
-
-    data.currentMonth.forEach(({ day, total }) => {
-        currSeries[day - 1] = total;
-    });
+        if (
+          !data ||
+          !Array.isArray(data.previousMonth) ||
+          !Array.isArray(data.currentMonth)
+        ) {
+          console.warn("⚠️ Invalid sales data format:", data);
+          return {
+            series: [],
+            options: chartOptions.options, // fallback to default
+          };
+        }
+      
+        // handle empty arrays safely
+        const prevDays = data.previousMonth.map((item) => item.day || 0);
+        const currDays = data.currentMonth.map((item) => item.day || 0);
+      
+        const maxDay = Math.max(...prevDays, ...currDays, 0); // fallback to 0
+      
+        const labels = Array.from({ length: Math.max(maxDay, 1) }, (_, i) => `${i + 1}`);
+        const prevSeries = Array(Math.max(maxDay, 1)).fill(0);
+        const currSeries = Array(Math.max(maxDay, 1)).fill(0);
+      
+        data.previousMonth.forEach(({ day, total }) => {
+          if (day && total != null) prevSeries[day - 1] = total;
+        });
+      
+        data.currentMonth.forEach(({ day, total }) => {
+          if (day && total != null) currSeries[day - 1] = total;
+        });
 
     return {
         series: [

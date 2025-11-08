@@ -14,8 +14,7 @@ from database import SessionLocal
 from models import Client
 from tasks.fetch_orders import fetch_orders_task
 from tasks.fetch_products import fetch_products_task
-
-
+from datetime import datetime
 
 # Get Redis URL from environment, or construct it with fallback defaults
 REDIS_URL = os.getenv("REDIS_URL")
@@ -61,6 +60,27 @@ celery.conf.update(
     beat_scheduler='celery.beat.PersistentScheduler',
 )
 
+@shared_task(name="mark_sync_complete_task")
+def mark_sync_complete_task(_, client_id):
+    """
+    Marks client sync as complete after the onboarding chain finishes.
+    `_` is the previous result (ignored).
+    """
+    print(f"🏁 Finalizing sync for client_id={client_id}")
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if client:
+            client.sync_status = "COMPLETE"
+            client.last_synced_at = datetime.utcnow()
+            db.commit()
+            print(f"✅ Sync complete for {client.email}")
+    except Exception as e:
+        print(f"❌ Error marking sync complete: {e}")
+    finally:
+        db.close()
+
+
 @shared_task(name="onboard_new_client_task")
 def onboard_new_client_task(client_id):
     """
@@ -69,13 +89,23 @@ def onboard_new_client_task(client_id):
     2. Then fetch orders
     """
     print(f"🚀 Starting onboarding for client_id={client_id}")
+    db = SessionLocal()
+    try:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if client:
+            client.sync_status = "IN_PROGRESS"
+            db.commit()
+            print(f"🔄 Sync started for {client.email}")
+    finally:
+        db.close()
 
     # Chain ensures fetch_orders runs *after* fetch_products completes
     workflow = chain(
         fetch_products_task.si(client_id=client_id),
         fetch_orders_task.si(client_id=client_id, full_fetch=True)
     )
-    workflow.apply_async()
+    # add a callback to mark completion once the chain finishes
+    workflow.apply_async(link=mark_sync_complete_task.s(client_id=client_id))
     print(f"✅ Onboarding workflow queued for client_id={client_id}")
 
 @shared_task(name="fetch_all_clients_orders_task")

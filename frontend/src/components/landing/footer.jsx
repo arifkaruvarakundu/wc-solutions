@@ -84,21 +84,15 @@ export function Footer() {
         </div>
 
         {/* Bottom Section */}
-        <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="mt-12 pt-8 border-t border-border flex flex-col items-center gap-4">
           <p className="text-sm text-muted-foreground">
             {/* © 2025 WooInsights. All rights reserved. */}
           </p>
           <div className="flex gap-6 text-sm">
-            <a
-              href="#"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
               Privacy Policy
             </a>
-            <a
-              href="#"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <a href="#" className="text-muted-foreground hover:text-foreground transition-colors">
               Terms of Service
             </a>
           </div>

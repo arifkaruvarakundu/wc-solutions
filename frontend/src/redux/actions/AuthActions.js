@@ -34,20 +34,22 @@ export const register =
       const { data } = await api.post("/register", {
         email,
         password,
-        client_name: client_name,
-        store_url: store_url,
-        consumer_key: consumer_key,
-        consumer_secret: consumer_secret
+        client_name,
+        store_url,
+        consumer_key,
+        consumer_secret,
       });
 
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("email", data.email);
-      // localStorage.setItem("user_type", data.user_type)
 
       dispatch({
         type: "AUTH_SUCCESS",
         payload: { token: data.access_token, email: data.email },
       });
+
+      // ✅ Return full backend response to frontend
+      return { payload: data };
     } catch (error) {
       let message = "Registration failed";
       const detail = error.response?.data?.detail;
@@ -62,9 +64,10 @@ export const register =
         type: "AUTH_FAIL",
         payload: message,
       });
+
+      throw new Error(message); // ✅ also propagate to frontend catch
     }
   };
-
 
   export const logout = () => async (dispatch) => {
     try {
