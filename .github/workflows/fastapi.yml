@@ -1,5 +1,3 @@
-
-
 name: FastAPI CI
 
 on:
@@ -14,13 +12,15 @@ jobs:
         working-directory: ./backend
 
     steps:
+      # Clean workspace without sudo
       - name: Force clean workspace
-        run: sudo rm -rf /home/harif/actions-runner/_work/wc-solutions/wc-solutions/*
+        run: rm -rf /home/harif/actions-runner/_work/wc-solutions/wc-solutions/* || true
 
       - uses: actions/checkout@v4
 
-      - name: Fix file ownership
-        run: sudo chown -R $USER .
+      # Ownership fixing not required if harif owns files
+      # - name: Fix file ownership
+      #   run: sudo chown -R $USER .
 
       - name: Copy environment file
         run: cp /home/harif/envs/wc-solutions.env .env
