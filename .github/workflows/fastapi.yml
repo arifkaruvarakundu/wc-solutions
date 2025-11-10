@@ -12,22 +12,22 @@ jobs:
         working-directory: ./backend
 
     steps:
-      # Clean workspace without sudo
-      - name: Force clean workspace
-        run: rm -rf /home/harif/actions-runner/_work/wc-solutions/wc-solutions/* || true
-
+      # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # Ownership fixing not required if harif owns files
-      # - name: Fix file ownership
-      #   run: sudo chown -R $USER .
-
+      # 2️⃣ Copy environment file
       - name: Copy environment file
         run: cp /home/harif/envs/wc-solutions.env .env
 
+      # 3️⃣ Stop old containers and remove volumes (optional clean build)
+      - name: Stop old containers
+        run: docker compose down || true
+
+      # 4️⃣ Build and start containers
       - name: Build and start containers
         run: docker compose up -d --build
 
+      # 6️⃣ Stop containers after tests
       - name: Stop containers
         if: always()
         run: docker compose down
