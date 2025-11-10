@@ -61,50 +61,54 @@ services:
     networks:
       - wc_network
 
-  # wc_solutions_fastapi_app:
-  #   build: .
-  #   container_name: fastapi_app
-  #   command: >
-  #     gunicorn backend.main:app
-  #     -w 4
-  #     -k uvicorn.workers.UvicornWorker
-  #     -b 0.0.0.0:8000
-  #     --forwarded-allow-ips="*"
-  #   volumes:
-  #     - .:/app
-  #   environment:
-  #     - REDIS_URL=${REDIS_URL}
-  #     - DATABASE_URL=${DATABASE_URL}
-  #   depends_on:
-  #     postgres_db:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   ports:
-  #     - "8000:8000"
-
-  wc_solutions_fastapi_dev:
+  wc_solutions_fastapi_app:
     build: .
-    container_name: wc_solutions_dev
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    container_name: fastapi_app
+    command: >
+      gunicorn main:app
+      -w 4
+      -k uvicorn.workers.UvicornWorker
+      -b 0.0.0.0:8000
+      --forwarded-allow-ips="*"
+    volumes:
+      - .:/app
     environment:
       - FERNET_KEY=${FERNET_KEY}
       - REDIS_URL=${REDIS_URL}
       - DATABASE_URL=${DATABASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
     depends_on:
-      wc_solutions_postgres_db:
-        condition: service_healthy
-      wc_solutions_redis_backend:
-        condition: service_healthy
-      wc_solutions_celery_worker:
-        condition: service_started
+    wc_solutions_postgres_db:
+      condition: service_healthy
+    wc_solutions_redis_backend:
+      condition: service_healthy
+    expose:
+      - "8000"  # internal only (not mapped to host)
     networks:
       - wc_network
+
+  # wc_solutions_fastapi_dev:
+  #   build: .
+  #   container_name: wc_solutions_dev
+  #   command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+  #   environment:
+  #     - FERNET_KEY=${FERNET_KEY}
+  #     - REDIS_URL=${REDIS_URL}
+  #     - DATABASE_URL=${DATABASE_URL}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #   volumes:
+  #     - .:/app
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     wc_solutions_postgres_db:
+  #       condition: service_healthy
+  #     wc_solutions_redis_backend:
+  #       condition: service_healthy
+  #     wc_solutions_celery_worker:
+  #       condition: service_started
+  #   networks:
+  #     - wc_network
 
   wc_solutions_celery_worker:
     build: .
@@ -143,25 +147,32 @@ services:
         condition: service_healthy
     networks:
       - wc_network
-  # wc_solutions_nginx:
-  #   image: nginx:latest
-  #   container_name: nginx
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-  #     - ./certbot/www:/var/www/certbot
-  #     - ./certbot/conf:/etc/letsencrypt
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   depends_on:
-  #     - wc_solutions_fastapi_app
+  wc_solutions_nginx:
+    image: nginx:latest
+    container_name: wc_solutions_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    depends_on:
+      - wc_solutions_fastapi_app
+    networks:
+      - wc_network
   
-  # wc_solutions_certbot:
-  #   image: certbot/certbot
-  #   container_name: wc_solutions_certbot
-  #   volumes:
-  #     - ./certbot/conf:/etc/letsencrypt
-  #     - ./certbot/www:/var/www/certbot
+  wc_solutions_certbot:
+    image: certbot/certbot
+    container_name: wc_solutions_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done"
+    networks:
+      - wc_network
 
 volumes:
   pgdata:
