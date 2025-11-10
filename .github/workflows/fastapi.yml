@@ -12,10 +12,11 @@ jobs:
         working-directory: ./backend
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Fix file ownership for cleanup
         run: sudo chown -R $USER backend/
         
-      - uses: actions/checkout@v4
       - name: Copy environment file
         run: cp /home/harif/envs/wc-solutions.env .env
 
