@@ -12,6 +12,12 @@ jobs:
         working-directory: ./backend
 
     steps:
+      # 0️⃣ Fix permissions and clean Python artifacts
+      - name: Fix permissions on repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+          sudo chmod -R u+rwX $GITHUB_WORKSPACE
+          find $GITHUB_WORKSPACE -name '*.pyc' -delete
       # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
