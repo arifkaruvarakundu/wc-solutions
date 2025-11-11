@@ -2,9 +2,7 @@ name: FastAPI CD (Deploy to Server)
 
 on:
   workflow_dispatch:  # manual trigger from GitHub
-  push:
-    branches: [ "main" ]
-
+  
 jobs:
   deploy:
     runs-on: [self-hosted]
