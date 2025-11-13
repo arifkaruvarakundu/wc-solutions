@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'react-apexcharts';
 import { useSelector } from 'react-redux';
-import StatusCard from '../components/status-card/StatusCard';
+import StatusCard from '../components/status-card/statusCard';
 import Table from '../components/table/Table';
 import Badge from '../components/badge/Badge';
 import { useTranslation} from 'react-i18next';
